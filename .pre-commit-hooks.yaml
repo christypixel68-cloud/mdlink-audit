@@ -1,0 +1,7 @@
+- id: mdlink-audit
+  name: Check local Markdown links
+  description: Audit the repository, including inbound links to changed headings.
+  entry: mdlink-audit --fail-on-empty
+  language: python
+  pass_filenames: false
+  types: [markdown]

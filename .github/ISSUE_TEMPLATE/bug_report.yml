@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem in local link validation or CLI behavior.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read the documented limitations first. Do not post secrets or private repository content. For a suspected vulnerability, follow SECURITY.md.
+  - type: input
+    id: environment
+    attributes:
+      label: Versions and platform
+      description: Include mdlink-audit, Python, operating system, and relevant filesystem details.
+      placeholder: "mdlink-audit 0.1.0; Python 3.11; Windows / macOS / Linux"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and configuration
+      description: Paste the exact command, current working directory, root, and relevant TOML configuration. Remove private paths.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include a small file tree, the source Markdown, and the destination file or heading. Preserve filename casing and encoding. Explain any symlinks.
+      placeholder: |
+        Files:
+          README.md
+          docs/guide.md
+
+        Source Markdown:
+        ...
+
+        Destination Markdown:
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: Explain what should happen and why.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output and exit status
+      render: text
+    validations:
+      required: true

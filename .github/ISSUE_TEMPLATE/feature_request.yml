@@ -1,0 +1,32 @@
+name: Feature request
+description: Describe a documentation problem and a testable improvement.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check docs/roadmap.md and docs/design.md for current plans and scope. A concrete documentation example helps assess the request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What documentation workflow is difficult or unsupported today? Include a small example without private content.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the expected result, any configuration, and how it could be tested.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and tradeoffs
+      description: Include workarounds or existing tools you considered, and compatibility concerns if relevant.
+  - type: textarea
+    id: contribution
+    attributes:
+      label: Supporting material
+      description: Optional fixtures, public repository examples, or implementation ideas.
