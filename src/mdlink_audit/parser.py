@@ -2,9 +2,10 @@
 
 Markdown syntax is parsed by markdown-it-py rather than regular expressions.
 This is a documented subset of GitHub's rendering, not a full GFM renderer:
-raw HTML href/src, generated site routes, and GitHub emoji expansion are not
-interpreted. Link positions identify the opening bracket, including multiline
-paragraphs; unusual nested block containers may have approximate line numbers.
+raw HTML href/src are opt-in; generated site routes and GitHub emoji expansion
+are not interpreted. Link positions identify the opening bracket or HTML tag,
+including multiline paragraphs; unusual nested block containers may have
+approximate line numbers.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from html.parser import HTMLParser
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline.autolink import autolink
+from markdown_it.rules_inline.html_inline import html_inline
 from markdown_it.rules_inline.image import image
 from markdown_it.rules_inline.link import link
 from markdown_it.rules_inline.state_inline import StateInline
@@ -25,7 +27,7 @@ from markdown_it.token import Token
 
 @dataclass(frozen=True)
 class Link:
-    """One rendered Markdown link/image, with a one-based source line."""
+    """One Markdown/HTML link or resource, with a one-based source line."""
 
     target: str
     line: int
@@ -68,24 +70,53 @@ def _markdown_parser() -> MarkdownIt:
     parser.inline.ruler.at("link", _with_line_offset(link, "link_open"))
     parser.inline.ruler.at("image", _with_line_offset(image, "image"))
     parser.inline.ruler.at("autolink", _with_line_offset(autolink, "link_open"))
+    parser.inline.ruler.at("html_inline", _with_line_offset(html_inline, "html_inline"))
     return parser
 
 
 class _AnchorHTMLParser(HTMLParser):
-    """Read only explicit anchor names/IDs; comments stay non-rendered."""
+    """Read static HTML tokens while preserving their document source lines.
 
-    def __init__(self) -> None:
+    Only tokens that Markdown recognizes as HTML are fed here. Padding omitted
+    source lines keeps HTMLParser's positions useful across separate fragments.
+    Its raw-text handling also prevents tags inside script/style being read.
+    """
+
+    def __init__(self, links: list[Link], *, include_html: bool) -> None:
         super().__init__(convert_charrefs=True)
         self.anchors: set[str] = set()
+        self.links = links
+        self.include_html = include_html
+        self.raw_tag: str | None = None
+        self._fed_line = 1
+
+    def feed_at(self, content: str, line: int) -> None:
+        padding = "\n" * max(0, line - self._fed_line)
+        self.feed(padding + content)
+        self._fed_line += len(padding) + content.count("\n")
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "a":
-            for key, value in attrs:
-                if key in {"name", "id"} and value:
-                    self.anchors.add(value)
+        for key, value in attrs:
+            if value is None:
+                continue
+            if value and (
+                (tag == "a" and key in {"name", "id"}) or (self.include_html and key == "id")
+            ):
+                self.anchors.add(value)
+            if self.include_html and key in {"href", "src"}:
+                self.links.append(
+                    Link(value, self.getpos()[0], is_image=tag == "img" and key == "src")
+                )
+        if tag in {"script", "style"}:
+            self.raw_tag = tag
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == self.raw_tag:
+            self.raw_tag = None
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
 
 
 def _heading_text(tokens: Sequence[Token]) -> str:
@@ -118,13 +149,19 @@ def _heading_slug(text: str) -> str:
     )
 
 
-def parse_markdown(text: str) -> ParsedDocument:
+def parse_markdown(text: str, *, include_html: bool = False) -> ParsedDocument:
     """Parse supported links and anchors without reading files or the network.
 
     Targets use markdown-it-py's normalized URLs: Unicode and spaces can be
     percent-encoded. The filesystem checker should split the URL first, then
     percent-decode its path and fragment once. Reference destinations are
     emitted at each use, not at their definition.
+
+    With include_html, static href/src attributes and all element IDs are read
+    from Markdown's HTML tokens. HTML attribute entities are decoded once; URL
+    percent escapes remain intact. HTML positions identify the opening tag.
+    This is not a browser DOM parser: generated attributes, srcset, CSS URLs,
+    and malformed-markup recovery beyond HTMLParser are unsupported.
     """
     # A closed YAML front matter block is metadata, not rendered Markdown.
     # Replace it with blank lines to keep diagnostic positions unchanged.
@@ -139,7 +176,7 @@ def parse_markdown(text: str) -> ParsedDocument:
     links: list[Link] = []
     generated_anchors: set[str] = set()
     next_suffix: dict[str, int] = {}
-    custom = _AnchorHTMLParser()
+    custom = _AnchorHTMLParser(links, include_html=include_html)
     in_heading = False
 
     for token in tokens:
@@ -148,11 +185,13 @@ def parse_markdown(text: str) -> ParsedDocument:
         elif token.type == "heading_close":
             in_heading = False
         elif token.type == "html_block":
-            custom.feed(token.content)
+            custom.feed_at(token.content, token.map[0] + 1 if token.map else 1)
         elif token.type == "inline":
             children = token.children or []
             base_line = token.map[0] + 1 if token.map else 1
-            if in_heading:
+            if in_heading and not (include_html and custom.raw_tag is not None):
+                # An inline script/style can remain open across Markdown
+                # blocks. Any apparent heading in its body is raw HTML text.
                 base = _heading_slug(_heading_text(children))
                 slug = base
                 suffix = next_suffix.get(base, 0)
@@ -162,6 +201,13 @@ def parse_markdown(text: str) -> ParsedDocument:
                 next_suffix[base] = suffix
                 generated_anchors.add(slug)
             for child in children:
+                if child.type == "html_inline":
+                    custom.feed_at(child.content, base_line + child.meta.get(_LINE_OFFSET, 0))
+                    continue
+                if include_html and custom.raw_tag is not None:
+                    # Markdown can tokenize script/style bodies within an
+                    # inline paragraph; these links are raw text in HTML.
+                    continue
                 if child.type in {"link_open", "image"}:
                     is_image = child.type == "image"
                     target = child.attrGet("src" if is_image else "href")
@@ -173,8 +219,6 @@ def parse_markdown(text: str) -> ParsedDocument:
                                 is_image=is_image,
                             )
                         )
-                elif child.type == "html_inline":
-                    custom.feed(child.content)
 
     custom.close()
     return ParsedDocument(tuple(links), frozenset(generated_anchors | custom.anchors))

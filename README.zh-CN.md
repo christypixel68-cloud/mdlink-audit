@@ -1,10 +1,12 @@
 # mdlink-audit
 
+[![CI](https://github.com/christypixel68-cloud/mdlink-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/christypixel68-cloud/mdlink-audit/actions/workflows/ci.yml)
+
 在重命名、移动文件或发布版本前，检查文档中的本地链接是否仍然有效。
 
 **mdlink-audit** 是一个离线运行的 Python 命令行工具，用于检查仓库内 Markdown 的文件链接、图片路径和标题锚点。结果可输出为终端文本、JSON 或 GitHub Actions 注解。
 
-[English](README.md) · [使用说明](docs/usage.md) · [设计与限制](docs/design.md) · [参与贡献](CONTRIBUTING.md)
+[English](README.md) · [使用说明](docs/usage.md) · [GitHub Action](docs/github-action.md) · [真实仓库验证](docs/validation.md) · [参与贡献](CONTRIBUTING.md)
 
 ## 检查范围
 
@@ -13,22 +15,23 @@
 - Markdown 文件中的标题锚点，包括同一文档内的跳转。
 - 文件名大小写，即使在 Windows 上也检查，提前发现 Linux CI 中可能失效的链接。
 - 超出指定仓库根目录的目标，包括指向仓库外的符号链接。
+- 可选检查 Markdown 内静态 HTML 的 `href`、`src` 链接和元素 ID。
 
-外部网址和带协议的链接会被跳过，不发起网络请求。当前不解析原始 HTML 的 `href`/`src`、MDX 表达式和文档框架的路由规则。
+外部网址和带协议的链接会被跳过，不发起网络请求。当前不解析 MDX 表达式、`srcset`、CSS URL 和文档框架的路由规则。
 
 ## 快速开始
 
 检查结果会为相近的文件名、标题和大小写错误提供候选修正链接，供你确认后修改。已闭合的 YAML 文档头、代码示例和注释不参与链接检查。
 
-需要 **Python 3.11 或更高版本**。克隆仓库后安装：
+需要 **Python 3.11 或更高版本**。使用 pip 和 Git 安装指定版本，然后在需要检查的仓库目录运行：
 
 ```sh
-git clone https://github.com/christypixel68-cloud/mdlink-audit.git
-cd mdlink-audit
-python -m pip install .
+python -m pip install "git+https://github.com/christypixel68-cloud/mdlink-audit.git@v0.2.0"
 python -m mdlink_audit --help
 python -m mdlink_audit .
 ```
+
+也可以从 [GitHub Release](https://github.com/christypixel68-cloud/mdlink-audit/releases/tag/v0.2.0) 下载 `.whl` 文件，再用 `python -m pip install 下载的文件路径.whl` 安装。当前尚未发布到 PyPI。
 
 安装后也可使用 `mdlink-audit` 命令：
 
@@ -38,9 +41,11 @@ mdlink-audit README.md docs --format text
 mdlink-audit --format json
 ```
 
-运行下面的演示，会先在临时仓库中报告路径大小写和标题错误，再展示修正后的通过结果：
+从源码目录运行演示，会先在临时仓库中报告路径大小写和标题错误，再展示修正后的通过结果：
 
 ```sh
+git clone https://github.com/christypixel68-cloud/mdlink-audit.git
+cd mdlink-audit
 python examples/demo.py
 ```
 
@@ -55,9 +60,10 @@ python examples/demo.py
 ```toml
 exclude = ["generated/**", "vendor/**"]
 ignore_links = ["/generated-api/*"]
+include_html = true
 ```
 
-这两个键直接位于文件顶层，不要添加表头。也可使用 `--config` 指定配置文件，或重复传入 `--exclude`、`--ignore-link`。被忽略的目标将不再校验，建议只对明确由构建流程生成的内容设置例外。详细行为见[使用说明](docs/usage.md)。
+这些键直接位于文件顶层，不要添加表头。HTML 检查默认关闭，通过 `include_html = true` 或 `--include-html` 开启。也可使用 `--config` 指定配置文件，或重复传入 `--exclude`、`--ignore-link`。被忽略的目标将不再校验，建议只对明确由构建流程生成的内容设置例外。详细行为见[使用说明](docs/usage.md)。
 
 ## 接入 GitHub Actions
 
@@ -78,15 +84,30 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - run: python -m pip install "git+https://github.com/christypixel68-cloud/mdlink-audit.git@main"
-      - run: mdlink-audit --format github --fail-on-empty
+      - uses: christypixel68-cloud/mdlink-audit@v0.2.0
+        with:
+          include-html: 'true'
 ```
 
-源码已在 [GitHub](https://github.com/christypixel68-cloud/mdlink-audit) 公开，尚未发布到 PyPI，请使用上面的源码安装命令。正式采用工作流示例时，应把 `main` 替换为经过审查的固定提交。安装后的检查过程不需要联网。
+Action 默认扫描整个仓库，没有 Markdown 文件时也会报错。[完整参数](docs/github-action.md#inputs)支持指定路径和配置。正式采用时建议将 Action 版本固定到经过审查的完整提交 SHA。安装依赖可能需要联网，安装后的检查过程不需要联网。
+
+## 提交前检查
+
+在 `.pre-commit-config.yaml` 中加入：
+
+```yaml
+repos:
+  - repo: https://github.com/christypixel68-cloud/mdlink-audit
+    rev: v0.2.0
+    hooks:
+      - id: mdlink-audit
+```
+
+每次运行钩子都会检查整个仓库，包括只移动或删除图片等被引用文件的提交，便于发现未修改的文档中受到影响的链接。
 
 ## 当前状态
 
-这是 `0.1.0` 初始实现。已有其他工具具备相近能力，本项目聚焦离线 Python 工作流、本地路径和标题检查，以及便于定位问题的 CI 输出。它不是完整的 GitHub Markdown 渲染器，也不保证完整兼容 GitHub Flavored Markdown。
+`0.2.0` 仍是早期版本。已有其他工具具备相近能力，本项目聚焦离线 Python 工作流、本地路径和标题检查，以及便于定位问题的 CI 输出。它不是完整的 GitHub Markdown 渲染器，也不保证完整兼容 GitHub Flavored Markdown。
 
 在把它作为发布检查前，请先阅读[已知限制](docs/design.md#known-limitations)。[路线图](docs/roadmap.md)列出了后续候选工作，[更新记录](CHANGELOG.md)仅记录已实现的变化。
 

@@ -18,4 +18,4 @@ The tool's root restriction is a validation rule, not a sandbox for hostile file
 
 ## Supported versions
 
-During the initial `0.1.x` development period, fixes target the latest development version. There is no long-term support branch yet. Confirm the current changelog before reporting an issue already addressed by a newer version.
+During early `0.x` development, fixes target the latest release and development version. There is no long-term support branch yet. Confirm the current changelog before reporting an issue already addressed by a newer version.

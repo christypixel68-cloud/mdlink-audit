@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — HTML links and CI integration
+
+- Added opt-in static HTML `href`/`src` validation and arbitrary HTML element IDs inside Markdown, preserving the default Markdown-only behavior.
+- Added `include_html` configuration and `--include-html` / `--no-include-html` CLI overrides.
+- Added a composite GitHub Action with multiline path inputs, configuration overrides, isolated Python subprocesses, and failure propagation.
+- Added actual composite Action smoke checks for Linux, Windows, and macOS, including broken and corrected links.
+- Run the pre-commit hook for all commits so changes to images and other linked targets trigger an audit even when no Markdown source changed.
+- Added an offline corpus audit script that records repository revisions, source hashes, scan scope, and raw findings, with representative findings explained in the validation report.
+- Retained JSON report schema version `1` and exit statuses `0`, `1`, and `2`.
+
 ## 0.1.0 — initial implementation
 
 This entry describes the initial source implementation. It does not indicate a PyPI publication.

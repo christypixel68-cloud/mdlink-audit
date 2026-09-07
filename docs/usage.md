@@ -37,6 +37,7 @@ mdlink-audit [paths ...]
   [--config PATH]
   [--exclude GLOB ...]
   [--ignore-link GLOB ...]
+  [--include-html | --no-include-html]
   [--fail-on-empty]
   [--version]
 ```
@@ -58,6 +59,7 @@ mdlink-audit --ignore-link "/generated-api/*" --ignore-link "generated/*"
 | `--config PATH` | Read a specified TOML configuration file. |
 | `--exclude GLOB` | Exclude matching Markdown source paths from scanning. Repeatable. |
 | `--ignore-link GLOB` | Skip matching link destinations. Repeatable. |
+| `--include-html` / `--no-include-html` | Enable or disable static HTML links and IDs in Markdown, overriding configuration. |
 | `--fail-on-empty` | Exit with status `2` if no Markdown source files are selected. |
 | `--version` | Print the installed version. |
 
@@ -70,9 +72,10 @@ The checker automatically loads `.mdlink-audit.toml` from the selected root when
 ```toml
 exclude = ["vendor/**", "generated/**"]
 ignore_links = ["/generated-api/*"]
+include_html = true
 ```
 
-Both values are arrays of strings at the top level. Do not wrap them in `[tool.mdlink-audit]` or another table. CLI patterns are added to the configuration patterns; they do not replace them. `exclude` selects source files to omit; it is not a way to ignore a missing destination. `ignore_links` skips matching link destinations completely. Keep exceptions narrow and explain why they are needed in TOML comments.
+`exclude` and `ignore_links` are arrays of strings; `include_html` is a boolean, defaulting to `false`. All keys are at the top level. Do not wrap them in `[tool.mdlink-audit]` or another table. CLI patterns are added to the configuration patterns; they do not replace them. `exclude` selects source files to omit; it is not a way to ignore a missing destination. `ignore_links` skips matching link destinations completely. Keep exceptions narrow and explain why they are needed in TOML comments.
 
 Exclusions match case-sensitive, repository-relative paths using forward slashes and Python-style `fnmatch` patterns. An initial `**/` also matches a file directly under the root; `generated/**` can exclude an entire directory. These are glob patterns, not regular expressions or `.gitignore` rules. In particular, Python `fnmatch` allows `*` to match `/` within a path.
 
@@ -100,6 +103,20 @@ The following fenced example illustrates supported Markdown forms; the filenames
 Markdown files with fragments are checked against the destination document's headings and static HTML `<a id="...">` or `<a name="...">` anchors. Fragments on non-Markdown targets are not interpreted as document headings. A directory target is checked for existence only; a fragment on it is not checked against a README. Use exact filename casing even when your local filesystem accepts other casing.
 
 Links with external protocols, such as `https:`, `mailto:`, and `data:`, and protocol-relative URLs are skipped and counted as skipped destinations. An offline pass therefore says nothing about whether an external website is reachable.
+
+## Static HTML in Markdown
+
+Use `--include-html` or `include_html = true` to check static HTML attributes that Markdown recognizes as HTML:
+
+```html
+<a href="docs/guide.md#installation">Install</a>
+<img src="images/diagram.svg" alt="Diagram">
+<section id="custom-section">Section text</section>
+```
+
+In this mode, `href` and `src` use the same local path, casing, fragment, exclusion, and repository-boundary rules as Markdown links. All static element IDs are collected; `<a name="...">` also remains supported. This includes IDs in a different Markdown target file. Attribute entities such as `&amp;` are decoded once before URL percent decoding. Diagnostic lines identify the opening HTML tag, including when its attributes span multiple lines.
+
+Code examples, HTML comments, and script/style body text are excluded. Scripts are never executed. `srcset`, CSS URLs, templates, browser DOM recovery, and fragments inside standalone HTML files are outside scope. HTML checking remains opt-in because documentation frameworks can interpret raw HTML or paths differently. An explicit `--no-include-html` overrides a true TOML setting.
 
 ## Read the results
 
@@ -132,6 +149,6 @@ Use the process exit code as the CI gate. Do not assume that receiving a report 
 - **A generated route is reported as missing:** the checker validates filesystem targets. Build the real target before auditing or add a narrow `ignore_links` entry.
 - **A symlink points to an existing file but fails:** targets outside the selected root are not read. Keep audited documentation and targets inside the root.
 - **No documents were checked:** verify paths and exclusions, and use `--fail-on-empty` in CI.
-- **An HTML or MDX link is absent from results:** those syntaxes are outside the current parser scope.
+- **An HTML link is absent from results:** enable `--include-html`; only static `href`/`src` in Markdown HTML tokens are supported. MDX expressions remain outside scope.
 
 For a bug report, include a minimal source file, any destination file, the exact command, root and working directory, Python version, operating system, and actual output. Remove private paths and content before sharing.

@@ -65,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--exclude", action="append", default=[], metavar="GLOB")
     parser.add_argument("--ignore-link", action="append", default=[], metavar="GLOB")
     parser.add_argument(
+        "--include-html",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Also check static HTML href/src and IDs in Markdown (default: config or off)",
+    )
+    parser.add_argument(
         "--fail-on-empty", action="store_true", help="Exit 2 if no Markdown is scanned"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -79,7 +85,9 @@ def main(argv: list[str] | None = None) -> int:
             required=args.config is not None,
         )
         config = Config(
-            config.exclude + tuple(args.exclude), config.ignore_links + tuple(args.ignore_link)
+            exclude=config.exclude + tuple(args.exclude),
+            ignore_links=config.ignore_links + tuple(args.ignore_link),
+            include_html=config.include_html if args.include_html is None else args.include_html,
         )
         paths = [Path(path) for path in args.paths] if args.paths else None
         report = Auditor(root, config).run(paths)

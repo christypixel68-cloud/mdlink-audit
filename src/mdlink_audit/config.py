@@ -31,6 +31,7 @@ class AuditError(Exception):
 class Config:
     exclude: tuple[str, ...] = ()
     ignore_links: tuple[str, ...] = ()
+    include_html: bool = False
 
 
 def load_config(path: Path, *, required: bool = False) -> Config:
@@ -46,13 +47,20 @@ def load_config(path: Path, *, required: bool = False) -> Config:
         data = tomllib.loads(contents)
     except tomllib.TOMLDecodeError as exc:
         raise AuditError(f"Invalid TOML in {path}: {exc}") from exc
-    unknown = set(data) - {"exclude", "ignore_links"}
+    unknown = set(data) - {"exclude", "ignore_links", "include_html"}
     if unknown:
         raise AuditError(f"Unknown configuration keys: {', '.join(sorted(unknown))}")
-    for name, value in data.items():
+    for name in ("exclude", "ignore_links"):
+        value = data.get(name, [])
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             raise AuditError(f"Configuration '{name}' must be an array of strings")
-    return Config(tuple(data.get("exclude", [])), tuple(data.get("ignore_links", [])))
+    if not isinstance(data.get("include_html", False), bool):
+        raise AuditError("Configuration 'include_html' must be a boolean")
+    return Config(
+        tuple(data.get("exclude", [])),
+        tuple(data.get("ignore_links", [])),
+        data.get("include_html", False),
+    )
 
 
 def matches(value: str, patterns: tuple[str, ...]) -> bool:

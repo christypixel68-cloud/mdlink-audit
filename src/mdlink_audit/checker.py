@@ -151,7 +151,9 @@ class Auditor:
             if not _inside(file, self.root):
                 raise AuditError(f"Refusing to read outside the repository root: {file}")
             try:
-                self.documents[file] = parse_markdown(file.read_text(encoding="utf-8-sig"))
+                self.documents[file] = parse_markdown(
+                    file.read_text(encoding="utf-8-sig"), include_html=self.config.include_html
+                )
             except (OSError, UnicodeError) as exc:
                 raise AuditError(f"Cannot read Markdown file {file}: {exc}") from exc
         return self.documents[file]

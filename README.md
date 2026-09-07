@@ -1,10 +1,12 @@
 # mdlink-audit
 
+[![CI](https://github.com/christypixel68-cloud/mdlink-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/christypixel68-cloud/mdlink-audit/actions/workflows/ci.yml)
+
 Check local Markdown links before a rename, a move, or a release breaks your documentation.
 
 **mdlink-audit** is a small Python command-line tool for checking file links, image paths, and Markdown heading fragments inside a repository. It runs offline and can report failures in your terminal, as JSON, or as GitHub Actions annotations.
 
-[中文说明](README.zh-CN.md) · [Usage](docs/usage.md) · [Design and limitations](docs/design.md) · [Contributing](CONTRIBUTING.md)
+[中文说明](README.zh-CN.md) · [Usage](docs/usage.md) · [GitHub Action](docs/github-action.md) · [Repository validation](docs/validation.md) · [Contributing](CONTRIBUTING.md)
 
 ## What it checks
 
@@ -14,22 +16,23 @@ Check local Markdown links before a rename, a move, or a release breaks your doc
 - Filename casing, including on Windows, to catch links that would fail on a case-sensitive runner.
 - Targets that escape the selected repository root, including symlinks that point outside it.
 - Suggestions for close filename and heading matches, without modifying your documents.
+- Opt-in static HTML `href`/`src` links and element IDs inside Markdown.
 
 Closed YAML front matter, code examples, and comments are excluded from link extraction.
 
-External URLs and protocol links are skipped; no requests are made to check them. Raw HTML `href`/`src`, MDX expressions, and documentation framework routes are outside the current scope.
+External URLs and protocol links are skipped; no requests are made to check them. MDX expressions, `srcset`, CSS URLs, and documentation framework routes are outside the current scope.
 
 ## Try it
 
-Requires **Python 3.11 or later**. Clone the repository and install it:
+Requires **Python 3.11 or later**. Install the versioned source with pip and Git, then run the checker from the repository you want to audit:
 
 ```sh
-git clone https://github.com/christypixel68-cloud/mdlink-audit.git
-cd mdlink-audit
-python -m pip install .
+python -m pip install "git+https://github.com/christypixel68-cloud/mdlink-audit.git@v0.2.0"
 python -m mdlink_audit --help
 python -m mdlink_audit .
 ```
+
+Alternatively, download a wheel from the [GitHub release](https://github.com/christypixel68-cloud/mdlink-audit/releases/tag/v0.2.0) and install it with `python -m pip install path/to/downloaded.whl`. The package is not published to PyPI.
 
 The installed command is also available as `mdlink-audit`:
 
@@ -39,9 +42,11 @@ mdlink-audit README.md docs --format text
 mdlink-audit --format json
 ```
 
-To see a temporary repository fail with a casing error and a stale heading, then pass after both are fixed:
+From a source checkout, run the temporary broken-then-fixed demonstration:
 
 ```sh
+git clone https://github.com/christypixel68-cloud/mdlink-audit.git
+cd mdlink-audit
 python examples/demo.py
 ```
 
@@ -56,9 +61,10 @@ Place `.mdlink-audit.toml` in the repository root:
 ```toml
 exclude = ["generated/**", "vendor/**"]
 ignore_links = ["/generated-api/*"]
+include_html = true
 ```
 
-These are top-level keys, with no table header. You can also pass `--config`, repeat `--exclude`, or repeat `--ignore-link`. See the [usage guide](docs/usage.md) before ignoring links: an ignored destination is no longer validated.
+These are top-level keys, with no table header. HTML checking defaults to off; use `include_html = true` or `--include-html` to include static HTML links and IDs. You can also pass `--config`, repeat `--exclude`, or repeat `--ignore-link`. See the [usage guide](docs/usage.md) before ignoring links: an ignored destination is no longer validated.
 
 ## GitHub Actions
 
@@ -79,15 +85,30 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
-      - run: python -m pip install "git+https://github.com/christypixel68-cloud/mdlink-audit.git@main"
-      - run: mdlink-audit --format github --fail-on-empty
+      - uses: christypixel68-cloud/mdlink-audit@v0.2.0
+        with:
+          include-html: 'true'
 ```
 
-Source is available on [GitHub](https://github.com/christypixel68-cloud/mdlink-audit); the package has not been published to PyPI. Use the source installation instructions above. Replace `main` in the workflow example with a reviewed commit for reproducible adoption. The installed checker itself runs without network access.
+The action checks the whole repository and fails on an empty scan by default. See [action inputs](docs/github-action.md#inputs) for path and configuration options. Pin actions to reviewed full commit SHAs for reproducible use. Installation may download dependencies; the installed checker itself runs without network access.
+
+## pre-commit
+
+Add this to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/christypixel68-cloud/mdlink-audit
+    rev: v0.2.0
+    hooks:
+      - id: mdlink-audit
+```
+
+The hook scans the entire repository on every invocation, including commits that only move or remove images or other linked files. This catches inbound links whose source Markdown was not edited.
 
 ## Scope and status
 
-This is an initial `0.1.0` implementation. Other link checkers already cover overlapping use cases; this project focuses on an offline Python workflow with local paths, heading validation, and actionable CI output. It is not a full GitHub renderer and does not claim complete GitHub Flavored Markdown compatibility.
+Version `0.2.0` is an early release. Other link checkers already cover overlapping use cases; this project focuses on an offline Python workflow with local paths, heading validation, and actionable CI output. It is not a full GitHub renderer and does not claim complete GitHub Flavored Markdown compatibility.
 
 Please read the [known limitations](docs/design.md#known-limitations) before using it as a release gate. The [roadmap](docs/roadmap.md) describes proposed improvements, and the [changelog](CHANGELOG.md) records implemented changes.
 

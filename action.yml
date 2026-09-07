@@ -1,0 +1,55 @@
+name: mdlink-audit
+description: Check local Markdown links offline and report GitHub Actions annotations.
+branding:
+  icon: link
+  color: blue
+inputs:
+  paths:
+    description: Markdown files or directories, one per line, relative to the workspace. Empty scans root.
+    required: false
+    default: ''
+  root:
+    description: Repository boundary, relative to the workspace or absolute. Defaults to the workspace.
+    required: false
+    default: '.'
+  config:
+    description: Optional TOML file, relative to the workspace or absolute.
+    required: false
+    default: ''
+  exclude:
+    description: Additional file exclusion globs, one per line.
+    required: false
+    default: ''
+  ignore-links:
+    description: Additional link destination globs to skip, one per line.
+    required: false
+    default: ''
+  include-html:
+    description: True or false to override HTML href/src checking; empty follows the TOML configuration.
+    required: false
+    default: ''
+  fail-on-empty:
+    description: Fail when no Markdown files are selected. Accepts true or false.
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Install and run mdlink-audit
+      shell: python
+      env:
+        MDLINK_ACTION_PATH: ${{ github.action_path }}
+        MDLINK_INPUT_PATHS: ${{ inputs.paths }}
+        MDLINK_INPUT_ROOT: ${{ inputs.root }}
+        MDLINK_INPUT_CONFIG: ${{ inputs.config }}
+        MDLINK_INPUT_EXCLUDE: ${{ inputs.exclude }}
+        MDLINK_INPUT_IGNORE_LINKS: ${{ inputs.ignore-links }}
+        MDLINK_INPUT_INCLUDE_HTML: ${{ inputs.include-html }}
+        MDLINK_INPUT_FAIL_ON_EMPTY: ${{ inputs.fail-on-empty }}
+      run: |
+        import os
+        import runpy
+        from pathlib import Path
+
+        entry = Path(os.environ["MDLINK_ACTION_PATH"]) / "scripts" / "action_entry.py"
+        runpy.run_path(str(entry), run_name="__main__")
